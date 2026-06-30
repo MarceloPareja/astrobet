@@ -1,0 +1,6 @@
+{
+  "name": "AstroBet",
+  "description": "Plataforma de simulación de apuestas de fútbol con temática de Astro y transacciones bancarias simuladas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
