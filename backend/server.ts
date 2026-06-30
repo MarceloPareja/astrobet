@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import {
   getUserByUsername,
   getUserById,
@@ -9,19 +8,31 @@ import {
   getMatches,
   resetMatches,
   updateMatch,
+  createMatch,
   getBets,
   createBet,
   getTransactions,
   createTransaction,
   settleMatchBets
-} from "./src/server/dbOperations";
-import { User as AppUser, Bet, Transaction, BetSide, MatchStatus, BetStatus } from "./src/types";
+} from "./dbOperations";
+import { User as AppUser, Match, Bet, Transaction, BetSide, MatchStatus, BetStatus } from "../src/types";
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
+
+  // --- CORS MIDDLEWARE ---
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
 
   // --- API ENDPOINTS ---
 
@@ -37,6 +48,34 @@ async function startServer() {
       res.json({ success: true, matches });
     } catch (err: any) {
       console.error("Error fetching matches:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Create a match
+  app.post("/api/matches", async (req, res) => {
+    try {
+      const { homeTeam, awayTeam, homeFlag, awayFlag, oddsRatio, startTime } = req.body;
+      if (!homeTeam || !awayTeam || !homeFlag || !awayFlag || !oddsRatio || !startTime) {
+        return res.status(400).json({ success: false, error: "Datos de partido incompletos" });
+      }
+
+      const matchId = "m_" + Date.now();
+      const newMatch: Match = {
+        id: matchId,
+        homeTeam: homeTeam.trim(),
+        awayTeam: awayTeam.trim(),
+        homeFlag: homeFlag.trim(),
+        awayFlag: awayFlag.trim(),
+        oddsRatio: Number(oddsRatio),
+        status: MatchStatus.UPCOMING,
+        startTime: startTime.trim()
+      };
+
+      await createMatch(newMatch);
+      res.json({ success: true, match: newMatch });
+    } catch (err: any) {
+      console.error("Error creating match:", err);
       res.status(500).json({ success: false, error: err.message });
     }
   });
@@ -195,7 +234,7 @@ async function startServer() {
     }
   });
 
-  // Simulated deposit/withdrawal with backend latency
+  // Simulated deposit/withdrawal
   app.post("/api/bank-action", async (req, res) => {
     try {
       const { userId, type, amount } = req.body;
@@ -217,7 +256,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Saldo insuficiente" });
       }
 
-      // Simulate network latency (1.5 seconds) as Mateo did!
+      // Simulate network latency (1.5 seconds)
       setTimeout(async () => {
         try {
           let finalBalance = user.balance;
@@ -252,7 +291,6 @@ async function startServer() {
           });
         } catch (innerErr: any) {
           console.error("Error finalizing bank action:", innerErr);
-          // Standard server fallback if error occurs inside timeout
         }
       }, 1500);
 
@@ -298,24 +336,17 @@ async function startServer() {
     }
   });
 
-  // --- VITE MIDDLEWARE / STATIC ASSETS ---
-
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
+  // --- STATIC ASSETS FOR PRODUCTION ---
+  if (process.env.SERVE_STATIC === "true" || process.env.NODE_ENV === "production") {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*all", (req, res) => {
+    app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+  app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`[API Server] Running on port ${PORT}`);
   });
 }
 

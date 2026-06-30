@@ -10,8 +10,8 @@ import {
   runTransaction
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { User as AppUser, Match, Bet, Transaction, MatchStatus, BetStatus, BetSide } from "../types";
-import { INITIAL_MATCHES } from "../data/initialMatches";
+import { User as AppUser, Match, Bet, Transaction, MatchStatus, BetStatus, BetSide } from "../src/types";
+import { INITIAL_MATCHES } from "../src/data/initialMatches";
 
 // Helper collection references
 const usersCol = collection(db, "users");
@@ -87,6 +87,11 @@ export async function updateMatch(matchId: string, fields: Partial<Match>): Prom
   await updateDoc(docRef, fields);
 }
 
+export async function createMatch(match: Match): Promise<void> {
+  const docRef = doc(db, "matches", match.id);
+  await setDoc(docRef, match);
+}
+
 // --- BET OPERATIONS ---
 export async function getBets(userId?: string): Promise<Bet[]> {
   let q = query(betsCol);
@@ -95,7 +100,6 @@ export async function getBets(userId?: string): Promise<Bet[]> {
   }
   const querySnapshot = await getDocs(q);
   const results = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Bet[];
-  // Sort by createdAt / timestamp if needed, otherwise sort by ID descending (newest first)
   return results.sort((a, b) => b.id.localeCompare(a.id));
 }
 

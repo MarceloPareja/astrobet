@@ -88,6 +88,17 @@ export default function App() {
   const [adminAwayScore, setAdminAwayScore] = useState<number>(1);
   const [adminMessage, setAdminMessage] = useState('');
 
+  // Admin Match Creation State
+  const [adminTab, setAdminTab] = useState<'SIMULATE' | 'CREATE'>('SIMULATE');
+  const [adminHomeTeam, setAdminHomeTeam] = useState('');
+  const [adminAwayTeam, setAdminAwayTeam] = useState('');
+  const [adminHomeFlag, setAdminHomeFlag] = useState('⚽');
+  const [adminAwayFlag, setAdminAwayFlag] = useState('⚽');
+  const [adminOddsRatio, setAdminOddsRatio] = useState<number>(2.0);
+  const [adminStartTime, setAdminStartTime] = useState('Hoy, 20:00');
+  const [adminCreateMessage, setAdminCreateMessage] = useState('');
+  const [adminCreateError, setAdminCreateError] = useState('');
+
   // Toast feedback
   const [toastMessage, setToastMessage] = useState('');
 
@@ -480,6 +491,51 @@ export default function App() {
       setAdminSelectedMatchId('');
     } catch (err) {
       setAdminMessage('Error al conectar con la consola de administración.');
+    }
+  };
+
+  // Create match in Firebase
+  const handleCreateMatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminCreateError('');
+    setAdminCreateMessage('');
+
+    if (!adminHomeTeam || !adminAwayTeam || !adminHomeFlag || !adminAwayFlag || !adminOddsRatio || !adminStartTime) {
+      setAdminCreateError('Por favor completa todos los campos.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          homeTeam: adminHomeTeam,
+          awayTeam: adminAwayTeam,
+          homeFlag: adminHomeFlag,
+          awayFlag: adminAwayFlag,
+          oddsRatio: adminOddsRatio,
+          startTime: adminStartTime
+        })
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        setAdminCreateError(data.error || 'Error al crear partido.');
+      } else {
+        setAdminCreateMessage('¡Partido creado con éxito en Firestore!');
+        // Clear form
+        setAdminHomeTeam('');
+        setAdminAwayTeam('');
+        setAdminHomeFlag('⚽');
+        setAdminAwayFlag('⚽');
+        setAdminOddsRatio(2.0);
+        setAdminStartTime('Hoy, 20:00');
+        // Refresh match list immediately
+        fetchMatches();
+      }
+    } catch (err) {
+      setAdminCreateError('Error de red al conectar con el servidor.');
     }
   };
 
@@ -1383,88 +1439,221 @@ export default function App() {
                 
                 <div className="flex items-center gap-2 border-b border-brand-gray/20 pb-3">
                   <Settings className="w-5 h-5 text-brand-red" />
-                  <h3 className="font-display font-extrabold text-sm uppercase tracking-wider text-brand-light">Consola de Simulación (Firestore)</h3>
+                  <h3 className="font-display font-extrabold text-sm uppercase tracking-wider text-brand-light">Panel de Administración (Firestore)</h3>
                 </div>
 
-                <p className="text-[11px] text-brand-light/60">
-                  Usa esta consola para declarar el final de un partido y ver cómo Firestore calcula los pagos de cuotas y actualiza el saldo del usuario inmediatamente.
-                </p>
-
-                <form onSubmit={handleSimulateMatchEnd} className="space-y-3 text-xs">
-                  
-                  {/* Select Match */}
-                  <div>
-                    <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Selecciona Partido a Terminar</label>
-                    <select
-                      value={adminSelectedMatchId}
-                      onChange={(e) => setAdminSelectedMatchId(e.target.value)}
-                      className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2.5 focus:outline-none focus:border-brand-red text-brand-light"
-                    >
-                      <option value="">-- Elige Partido Activo --</option>
-                      {matches.filter(m => m.status === MatchStatus.UPCOMING).map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.homeTeam} vs {m.awayTeam} (cuota: 1:{m.oddsRatio})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Settings columns */}
-                  <div className="grid grid-cols-2 gap-3">
-                    
-                    {/* Winner selection */}
-                    <div>
-                      <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Ganador de Cuotas</label>
-                      <select
-                        value={adminWinner}
-                        onChange={(e) => setAdminWinner(e.target.value as BetSide)}
-                        className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2.5 focus:outline-none focus:border-brand-red text-brand-light"
-                      >
-                        <option value={BetSide.LEFT}>Lado Izquierdo (Local)</option>
-                        <option value={BetSide.RIGHT}>Lado Derecho (Visitante)</option>
-                      </select>
-                    </div>
-
-                    {/* Simualte scores */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[9px] font-mono text-brand-light/50 uppercase mb-1">Goles Local</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={adminHomeScore}
-                          onChange={(e) => setAdminHomeScore(parseInt(e.target.value) || 0)}
-                          className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 text-center text-brand-light"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-mono text-brand-light/50 uppercase mb-1">Goles Vis.</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={adminAwayScore}
-                          onChange={(e) => setAdminAwayScore(parseInt(e.target.value) || 0)}
-                          className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 text-center text-brand-light"
-                        />
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {adminMessage && (
-                    <div className="bg-brand-red/5 border border-brand-red/10 p-2.5 rounded-xl text-center font-mono text-[11px] text-brand-light/80">
-                      {adminMessage}
-                    </div>
-                  )}
-
+                {/* Tabs */}
+                <div className="flex border-b border-white/10 gap-4 mb-2">
                   <button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-brand-red to-brand-dark-red hover:opacity-95 text-brand-light py-2.5 rounded-xl font-display font-semibold transition-all duration-200 cursor-pointer text-center"
+                    onClick={() => setAdminTab('SIMULATE')}
+                    className={`pb-2 font-display text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                      adminTab === 'SIMULATE'
+                        ? 'border-brand-red text-brand-light'
+                        : 'border-transparent text-brand-light/40 hover:text-brand-light/65'
+                    }`}
                   >
-                    Simular Final de Partido 🎬
+                    🎬 Simular Partido
                   </button>
+                  <button
+                    onClick={() => setAdminTab('CREATE')}
+                    className={`pb-2 font-display text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
+                      adminTab === 'CREATE'
+                        ? 'border-brand-red text-brand-light'
+                        : 'border-transparent text-brand-light/40 hover:text-brand-light/65'
+                    }`}
+                  >
+                    ➕ Crear Partido
+                  </button>
+                </div>
 
-                </form>
+                {adminTab === 'SIMULATE' ? (
+                  <>
+                    <p className="text-[11px] text-brand-light/60">
+                      Usa esta consola para declarar el final de un partido y ver cómo Firestore calcula los pagos de cuotas y actualiza el saldo del usuario inmediatamente.
+                    </p>
+
+                    <form onSubmit={handleSimulateMatchEnd} className="space-y-3 text-xs">
+                      
+                      {/* Select Match */}
+                      <div>
+                        <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Selecciona Partido a Terminar</label>
+                        <select
+                          value={adminSelectedMatchId}
+                          onChange={(e) => setAdminSelectedMatchId(e.target.value)}
+                          className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2.5 focus:outline-none focus:border-brand-red text-brand-light"
+                        >
+                          <option value="">-- Elige Partido Activo --</option>
+                          {matches.filter(m => m.status === MatchStatus.UPCOMING).map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.homeTeam} vs {m.awayTeam} (cuota: 1:{m.oddsRatio})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Settings columns */}
+                      <div className="grid grid-cols-2 gap-3">
+                        
+                        {/* Winner selection */}
+                        <div>
+                          <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Ganador de Cuotas</label>
+                          <select
+                            value={adminWinner}
+                            onChange={(e) => setAdminWinner(e.target.value as BetSide)}
+                            className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2.5 focus:outline-none focus:border-brand-red text-brand-light"
+                          >
+                            <option value={BetSide.LEFT}>Lado Izquierdo (Local)</option>
+                            <option value={BetSide.RIGHT}>Lado Derecho (Visitante)</option>
+                          </select>
+                        </div>
+
+                        {/* Simulate scores */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-mono text-brand-light/50 uppercase mb-1">Goles Local</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={adminHomeScore}
+                              onChange={(e) => setAdminHomeScore(parseInt(e.target.value) || 0)}
+                              className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 text-center text-brand-light"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-mono text-brand-light/50 uppercase mb-1">Goles Vis.</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={adminAwayScore}
+                              onChange={(e) => setAdminAwayScore(parseInt(e.target.value) || 0)}
+                              className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 text-center text-brand-light"
+                            />
+                          </div>
+                        </div>
+
+                      </div>
+
+                      {adminMessage && (
+                        <div className="bg-brand-red/5 border border-brand-red/10 p-2.5 rounded-xl text-center font-mono text-[11px] text-brand-light/80">
+                          {adminMessage}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        className="w-full bg-gradient-to-r from-brand-red to-brand-dark-red hover:opacity-95 text-brand-light py-2.5 rounded-xl font-display font-semibold transition-all duration-200 cursor-pointer text-center"
+                      >
+                        Simular Final de Partido 🎬
+                      </button>
+
+                    </form>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-brand-light/60">
+                      Crea un nuevo partido con cuotas personalizadas y guárdalo directamente en Firestore para que esté disponible para apostar al instante.
+                    </p>
+
+                    <form onSubmit={handleCreateMatch} className="space-y-3 text-xs">
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Equipo Local</label>
+                          <input
+                            type="text"
+                            value={adminHomeTeam}
+                            onChange={(e) => setAdminHomeTeam(e.target.value)}
+                            placeholder="Ej. Real Madrid"
+                            className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 focus:outline-none focus:border-brand-red text-brand-light"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Equipo Visitante</label>
+                          <input
+                            type="text"
+                            value={adminAwayTeam}
+                            onChange={(e) => setAdminAwayTeam(e.target.value)}
+                            placeholder="Ej. Barcelona"
+                            className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 focus:outline-none focus:border-brand-red text-brand-light"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Bandera Local</label>
+                          <input
+                            type="text"
+                            value={adminHomeFlag}
+                            onChange={(e) => setAdminHomeFlag(e.target.value)}
+                            placeholder="Ej. 🇪🇸"
+                            className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 focus:outline-none focus:border-brand-red text-brand-light"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Bandera Visitante</label>
+                          <input
+                            type="text"
+                            value={adminAwayFlag}
+                            onChange={(e) => setAdminAwayFlag(e.target.value)}
+                            placeholder="Ej. 🇪🇸"
+                            className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 focus:outline-none focus:border-brand-red text-brand-light"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Ratio Cuota (1:N)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="1.0"
+                            value={adminOddsRatio}
+                            onChange={(e) => setAdminOddsRatio(parseFloat(e.target.value) || 2.0)}
+                            className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 focus:outline-none focus:border-brand-red text-brand-light"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-mono text-brand-light/60 uppercase mb-1">Fecha / Hora / Estado</label>
+                          <input
+                            type="text"
+                            value={adminStartTime}
+                            onChange={(e) => setAdminStartTime(e.target.value)}
+                            placeholder="Ej. Hoy, 21:00"
+                            className="w-full bg-brand-bg border border-brand-gray rounded-xl p-2 focus:outline-none focus:border-brand-red text-brand-light"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {adminCreateError && (
+                        <div className="bg-brand-red/5 border border-brand-red/10 p-2.5 rounded-xl text-center font-mono text-[11px] text-brand-red">
+                          {adminCreateError}
+                        </div>
+                      )}
+
+                      {adminCreateMessage && (
+                        <div className="bg-green-500/5 border border-green-500/10 p-2.5 rounded-xl text-center font-mono text-[11px] text-green-400">
+                          {adminCreateMessage}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        className="w-full bg-gradient-to-r from-brand-red to-brand-dark-red hover:opacity-95 text-brand-light py-2.5 rounded-xl font-display font-semibold transition-all duration-200 cursor-pointer text-center"
+                      >
+                        Crear Partido ⚽
+                      </button>
+
+                    </form>
+                  </>
+                )}
 
               </div>
 
