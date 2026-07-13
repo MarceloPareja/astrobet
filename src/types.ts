@@ -28,6 +28,8 @@ export interface User {
   fullName: string;
   balance: number;
   bankDetails?: BankDetails;
+  password?: string;
+  token?: string;
 }
 
 export interface Match {

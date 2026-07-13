@@ -1,5 +1,12 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import path from "path";
+import helmet from "helmet";
+import cors from "cors";
+import morgan from "morgan";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { logger } from "./logger";
+import { apiLimiter, loginLimiter, inputSanitizer } from "./security.middleware";
 import {
   getUserByUsername,
   getUserById,
@@ -17,22 +24,44 @@ import {
 } from "./dbOperations";
 import { User as AppUser, Match, Bet, Transaction, BetSide, MatchStatus, BetStatus } from "../src/types";
 
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_astrobet';
+
+// Middleware to verify JWT token
+const verifyToken = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ success: false, error: "Acceso denegado. No se proporcionó un token." });
+  }
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ success: false, error: "Token inválido." });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    (req as any).user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, error: "Token expirado o inválido." });
+  }
+};
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  // Security middlewares
+  app.use(helmet());
+  app.use(cors({
+    origin: process.env.FRONTEND_URL || '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+  }));
+  app.use(apiLimiter);
   app.use(express.json());
+  app.use(inputSanitizer);
 
-  // --- CORS MIDDLEWARE ---
-  app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-    next();
-  });
+  // HTTP request logger
+  app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
   // --- API ENDPOINTS ---
 
@@ -53,7 +82,7 @@ async function startServer() {
   });
 
   // Create a match
-  app.post("/api/matches", async (req, res) => {
+  app.post("/api/matches", verifyToken, async (req, res) => {
     try {
       const { homeTeam, awayTeam, homeFlag, awayFlag, oddsRatio, startTime } = req.body;
       if (!homeTeam || !awayTeam || !homeFlag || !awayFlag || !oddsRatio || !startTime) {
@@ -81,13 +110,15 @@ async function startServer() {
   });
 
   // Get user profile/balance
-  app.get("/api/users/:userId", async (req, res) => {
+  app.get("/api/users/:userId", verifyToken, async (req, res) => {
     try {
       const user = await getUserById(req.params.userId);
       if (!user) {
         return res.status(404).json({ success: false, error: "Usuario no encontrado" });
       }
-      res.json({ success: true, user });
+      const userToReturn = { ...user };
+      delete userToReturn.password;
+      res.json({ success: true, user: userToReturn });
     } catch (err: any) {
       console.error("Error fetching user:", err);
       res.status(500).json({ success: false, error: err.message });
@@ -97,15 +128,19 @@ async function startServer() {
   // Register user
   app.post("/api/register", async (req, res) => {
     try {
-      const { username, fullName, email, bankDetails } = req.body;
-      if (!username || !fullName || !email || !bankDetails) {
-        return res.status(400).json({ success: false, error: "Datos de registro incompletos" });
+      const { username, fullName, email, bankDetails, password } = req.body;
+      if (!username || !fullName || !email || !bankDetails || !password) {
+        return res.status(400).json({ success: false, error: "Datos de registro incompletos. Se requiere contraseña." });
       }
 
       const existingUser = await getUserByUsername(username);
       if (existingUser) {
         return res.status(400).json({ success: false, error: "El nombre de usuario ya existe" });
       }
+
+      // Hash password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
 
       const userId = "u_" + Date.now();
       const newUser: AppUser = {
@@ -114,7 +149,8 @@ async function startServer() {
         fullName: fullName.trim(),
         email: email.trim(),
         balance: 500.00, // Welcome bonus
-        bankDetails
+        bankDetails,
+        password: hashedPassword
       };
 
       await createUser(newUser);
@@ -130,35 +166,52 @@ async function startServer() {
       };
       await createTransaction(welcomeTx);
 
-      res.json({ success: true, user: newUser });
+      const userToReturn = { ...newUser };
+      delete userToReturn.password;
+
+      res.json({ success: true, user: userToReturn });
     } catch (err: any) {
-      console.error("Error in registration:", err);
+      logger.error(`Error in registration: ${err.message}`, { stack: err.stack });
       res.status(500).json({ success: false, error: err.message });
     }
   });
 
   // Login user
-  app.post("/api/login", async (req, res) => {
+  app.post("/api/login", loginLimiter, async (req, res) => {
     try {
-      const { username } = req.body;
-      if (!username) {
-        return res.status(400).json({ success: false, error: "Usuario requerido" });
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ success: false, error: "Usuario y contraseña requeridos" });
       }
 
       const user = await getUserByUsername(username);
-      if (!user) {
-        return res.status(404).json({ success: false, error: "El usuario no existe" });
+      if (!user || !user.password) {
+        return res.status(401).json({ success: false, error: "Credenciales inválidas" });
       }
 
-      res.json({ success: true, user });
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        return res.status(401).json({ success: false, error: "Credenciales inválidas" });
+      }
+
+      const token = jwt.sign(
+        { id: user.id, username: user.username },
+        JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+
+      const userToReturn = { ...user, token };
+      delete userToReturn.password;
+
+      res.json({ success: true, user: userToReturn });
     } catch (err: any) {
-      console.error("Error in login:", err);
+      logger.error(`Error in login: ${err.message}`, { stack: err.stack });
       res.status(500).json({ success: false, error: err.message });
     }
   });
 
   // Place bet
-  app.post("/api/bets", async (req, res) => {
+  app.post("/api/bets", verifyToken, async (req, res) => {
     try {
       const { userId, matchId, matchInfo, side, amount, potentialPayout } = req.body;
       if (!userId || !matchId || !matchInfo || !side || !amount) {
@@ -213,7 +266,7 @@ async function startServer() {
   });
 
   // Get user's bets
-  app.get("/api/bets/:userId", async (req, res) => {
+  app.get("/api/bets/:userId", verifyToken, async (req, res) => {
     try {
       const bets = await getBets(req.params.userId);
       res.json({ success: true, bets });
@@ -224,7 +277,7 @@ async function startServer() {
   });
 
   // Get user's transactions
-  app.get("/api/transactions/:userId", async (req, res) => {
+  app.get("/api/transactions/:userId", verifyToken, async (req, res) => {
     try {
       const transactions = await getTransactions(req.params.userId);
       res.json({ success: true, transactions });
@@ -235,7 +288,7 @@ async function startServer() {
   });
 
   // Simulated deposit/withdrawal
-  app.post("/api/bank-action", async (req, res) => {
+  app.post("/api/bank-action", verifyToken, async (req, res) => {
     try {
       const { userId, type, amount } = req.body;
       if (!userId || !type || !amount) {
@@ -301,7 +354,7 @@ async function startServer() {
   });
 
   // Settle bets / End match
-  app.post("/api/admin/simulate-match", async (req, res) => {
+  app.post("/api/admin/simulate-match", verifyToken, async (req, res) => {
     try {
       const { matchId, winner, homeScore, awayScore } = req.body;
       if (!matchId || !winner) {
@@ -326,7 +379,7 @@ async function startServer() {
   });
 
   // Reset all matches to UPCOMING
-  app.post("/api/admin/reset-matches", async (req, res) => {
+  app.post("/api/admin/reset-matches", verifyToken, async (req, res) => {
     try {
       await resetMatches();
       res.json({ success: true, message: "Partidos reiniciados con éxito." });
@@ -346,7 +399,7 @@ async function startServer() {
   }
 
   app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(`[API Server] Running on port ${PORT}`);
+    logger.info(`[API Server] Running on port ${PORT}`);
   });
 }
 

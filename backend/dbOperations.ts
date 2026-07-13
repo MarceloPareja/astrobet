@@ -37,13 +37,17 @@ export async function getUserById(userId: string): Promise<AppUser | null> {
 
 export async function createUser(user: AppUser): Promise<void> {
   const docRef = doc(db, "users", user.id);
-  await setDoc(docRef, {
+  const userData: any = {
     username: user.username.trim().toLowerCase(),
     fullName: user.fullName,
     email: user.email,
     balance: user.balance,
     bankDetails: user.bankDetails
-  });
+  };
+  if (user.password) {
+    userData.password = user.password;
+  }
+  await setDoc(docRef, userData);
 }
 
 export async function updateUserBalance(userId: string, newBalance: number): Promise<void> {

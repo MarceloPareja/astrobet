@@ -52,10 +52,12 @@ export default function App() {
   
   // Login form
   const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
   // Register form
   const [regUsername, setRegUsername] = useState('');
+  const [regPassword, setRegPassword] = useState('');
   const [regFullName, setRegFullName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regBankName, setRegBankName] = useState('AstroBank');
@@ -115,26 +117,30 @@ export default function App() {
     }
   };
 
-  const fetchUserData = async (userId: string) => {
+  const fetchUserData = async (userId: string, token?: string) => {
     try {
+      const headers: any = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       // Fetch profile & balance
-      const userRes = await fetch(`/api/users/${userId}`);
+      const userRes = await fetch(`/api/users/${userId}`, { headers });
       const userData = await userRes.json();
       if (userData.success) {
+        if (token) userData.user.token = token;
         setCurrentUser(userData.user);
         // Save current state as active user backup
         localStorage.setItem('astrobet_active_user', JSON.stringify(userData.user));
       }
 
       // Fetch bets
-      const betsRes = await fetch(`/api/bets/${userId}`);
+      const betsRes = await fetch(`/api/bets/${userId}`, { headers });
       const betsData = await betsRes.json();
       if (betsData.success) {
         setBets(betsData.bets);
       }
 
       // Fetch transactions
-      const txsRes = await fetch(`/api/transactions/${userId}`);
+      const txsRes = await fetch(`/api/transactions/${userId}`, { headers });
       const txsData = await txsRes.json();
       if (txsData.success) {
         setTransactions(txsData.transactions);
@@ -152,14 +158,14 @@ export default function App() {
   // Polling data for real-time live engine updates
   useEffect(() => {
     if (currentUser) {
-      fetchUserData(currentUser.id);
+      fetchUserData(currentUser.id, currentUser.token);
       const interval = setInterval(() => {
         fetchMatches();
-        fetchUserData(currentUser.id);
+        fetchUserData(currentUser.id, currentUser.token);
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.token]);
 
   // Toast auto-clear
   useEffect(() => {
@@ -183,6 +189,7 @@ export default function App() {
   // Autocomplete test data
   const handleAutocompleteTestData = () => {
     setRegUsername('astrorider');
+    setRegPassword('Astro1234!');
     setRegFullName('Juan Pérez');
     setRegEmail('juan.perez@astro.com');
     setRegBankName('Banco de la Galaxia');
@@ -197,8 +204,8 @@ export default function App() {
     e.preventDefault();
     setRegError('');
 
-    if (!regUsername || !regFullName || !regEmail || !regBankName || !regAccountNumber || !regHolderName) {
-      setRegError('Por favor, completa todos los campos, incluyendo los datos bancarios.');
+    if (!regUsername || !regFullName || !regEmail || !regBankName || !regAccountNumber || !regHolderName || !regPassword) {
+      setRegError('Por favor, completa todos los campos, incluyendo la contraseña y los datos bancarios.');
       return;
     }
 
@@ -208,6 +215,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: regUsername.trim(),
+          password: regPassword.trim(),
           fullName: regFullName.trim(),
           email: regEmail.trim(),
           bankDetails: {
@@ -236,6 +244,7 @@ export default function App() {
       
       // Clean fields
       setRegUsername('');
+      setRegPassword('');
       setRegFullName('');
       setRegEmail('');
       setRegAccountNumber('');
@@ -250,8 +259,8 @@ export default function App() {
     e.preventDefault();
     setLoginError('');
 
-    if (!loginUsername) {
-      setLoginError('Por favor introduce tu usuario.');
+    if (!loginUsername || !loginPassword) {
+      setLoginError('Por favor introduce tu usuario y contraseña.');
       return;
     }
 
@@ -259,7 +268,10 @@ export default function App() {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: loginUsername.trim() })
+        body: JSON.stringify({ 
+          username: loginUsername.trim(),
+          password: loginPassword.trim()
+        })
       });
 
       const data = await res.json();
@@ -278,6 +290,7 @@ export default function App() {
 
       setToastMessage(`¡Hola de nuevo, ${data.user.fullName}! Datos cargados de Firebase.`);
       setLoginUsername('');
+      setLoginPassword('');
     } catch (err) {
       setLoginError('Error de red al conectar con Firebase.');
     }
@@ -346,7 +359,10 @@ export default function App() {
     try {
       const res = await fetch('/api/bets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUser.token}`
+        },
         body: JSON.stringify({
           userId: currentUser.id,
           matchId: selectedMatch.id,
@@ -405,7 +421,10 @@ export default function App() {
     try {
       const res = await fetch('/api/bank-action', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUser.token}`
+        },
         body: JSON.stringify({
           userId: currentUser.id,
           type,
@@ -463,7 +482,10 @@ export default function App() {
     try {
       const res = await fetch('/api/admin/simulate-match', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUser?.token}`
+        },
         body: JSON.stringify({
           matchId: adminSelectedMatchId,
           winner: adminWinner,
@@ -508,7 +530,10 @@ export default function App() {
     try {
       const res = await fetch('/api/matches', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUser?.token}`
+        },
         body: JSON.stringify({
           homeTeam: adminHomeTeam,
           awayTeam: adminAwayTeam,
@@ -542,7 +567,10 @@ export default function App() {
   // Reset Matches in Firebase
   const handleResetMatches = async () => {
     try {
-      const res = await fetch('/api/admin/reset-matches', { method: 'POST' });
+      const res = await fetch('/api/admin/reset-matches', { 
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${currentUser?.token}` }
+      });
       const data = await res.json();
       if (data.success) {
         await fetchMatches();
@@ -724,6 +752,17 @@ export default function App() {
                   </div>
 
                   <div>
+                    <label className="block text-xs font-mono text-brand-light/70 uppercase mb-1">Contraseña</label>
+                    <input
+                      type="password"
+                      placeholder="Ingresa tu contraseña"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      className="w-full bg-brand-bg border border-brand-gray rounded-xl p-3 text-sm focus:outline-none focus:border-brand-red font-mono text-brand-light"
+                    />
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-mono text-brand-light/70 uppercase mb-1">Nombre Completo</label>
                     <input
                       type="text"
@@ -837,6 +876,17 @@ export default function App() {
                       placeholder="Ingresa tu username"
                       value={loginUsername}
                       onChange={(e) => setLoginUsername(e.target.value)}
+                      className="w-full bg-brand-bg border border-brand-gray rounded-xl p-3 text-sm focus:outline-none focus:border-brand-red font-mono text-brand-light"
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-xs font-mono text-brand-light/70 uppercase mb-1">Contraseña</label>
+                    <input
+                      type="password"
+                      placeholder="Ingresa tu contraseña"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
                       className="w-full bg-brand-bg border border-brand-gray rounded-xl p-3 text-sm focus:outline-none focus:border-brand-red font-mono text-brand-light"
                     />
                   </div>
