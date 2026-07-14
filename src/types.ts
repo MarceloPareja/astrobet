@@ -14,6 +14,12 @@ export enum BetStatus {
   LOST = 'LOST'
 }
 
+export enum Role {
+  APOSTADOR = 'apostador',
+  ADMINISTRADOR = 'administrador',
+  AUDITOR = 'auditor'
+}
+
 export interface BankDetails {
   bankName: string;
   accountNumber: string;
@@ -27,6 +33,7 @@ export interface User {
   username: string;
   fullName: string;
   balance: number;
+  role: Role;
   bankDetails?: BankDetails;
   password?: string;
   token?: string;

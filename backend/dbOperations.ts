@@ -42,6 +42,7 @@ export async function createUser(user: AppUser): Promise<void> {
     fullName: user.fullName,
     email: user.email,
     balance: user.balance,
+    role: user.role || 'apostador',
     bankDetails: user.bankDetails
   };
   if (user.password) {

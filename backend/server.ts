@@ -22,7 +22,7 @@ import {
   createTransaction,
   settleMatchBets
 } from "./dbOperations";
-import { User as AppUser, Match, Bet, Transaction, BetSide, MatchStatus, BetStatus } from "../src/types";
+import { User as AppUser, Match, Bet, Transaction, BetSide, MatchStatus, BetStatus, Role } from "../src/types";
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_astrobet';
 
@@ -43,6 +43,20 @@ const verifyToken = (req: Request, res: Response, next: NextFunction) => {
   } catch (error) {
     return res.status(401).json({ success: false, error: "Token expirado o inválido." });
   }
+};
+
+// Middleware to require specific role
+const requireRole = (...roles: Role[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ success: false, error: "No autenticado." });
+    }
+    if (!roles.includes(user.role)) {
+      return res.status(403).json({ success: false, error: "No tienes permisos para realizar esta acción." });
+    }
+    next();
+  };
 };
 
 async function startServer() {
@@ -82,7 +96,7 @@ async function startServer() {
   });
 
   // Create a match
-  app.post("/api/matches", verifyToken, async (req, res) => {
+  app.post("/api/matches", verifyToken, requireRole(Role.ADMINISTRADOR), async (req, res) => {
     try {
       const { homeTeam, awayTeam, homeFlag, awayFlag, oddsRatio, startTime } = req.body;
       if (!homeTeam || !awayTeam || !homeFlag || !awayFlag || !oddsRatio || !startTime) {
@@ -116,7 +130,7 @@ async function startServer() {
       if (!user) {
         return res.status(404).json({ success: false, error: "Usuario no encontrado" });
       }
-      const userToReturn = { ...user };
+      const userToReturn = { ...user, role: user.role || Role.APOSTADOR };
       delete userToReturn.password;
       res.json({ success: true, user: userToReturn });
     } catch (err: any) {
@@ -149,6 +163,7 @@ async function startServer() {
         fullName: fullName.trim(),
         email: email.trim(),
         balance: 500.00, // Welcome bonus
+        role: Role.APOSTADOR,
         bankDetails,
         password: hashedPassword
       };
@@ -194,13 +209,15 @@ async function startServer() {
         return res.status(401).json({ success: false, error: "Credenciales inválidas" });
       }
 
+      const userRole = user.role || Role.APOSTADOR;
+
       const token = jwt.sign(
-        { id: user.id, username: user.username },
+        { id: user.id, username: user.username, role: userRole },
         JWT_SECRET,
         { expiresIn: "24h" }
       );
 
-      const userToReturn = { ...user, token };
+      const userToReturn = { ...user, role: userRole, token };
       delete userToReturn.password;
 
       res.json({ success: true, user: userToReturn });
@@ -354,7 +371,7 @@ async function startServer() {
   });
 
   // Settle bets / End match
-  app.post("/api/admin/simulate-match", verifyToken, async (req, res) => {
+  app.post("/api/admin/simulate-match", verifyToken, requireRole(Role.ADMINISTRADOR), async (req, res) => {
     try {
       const { matchId, winner, homeScore, awayScore } = req.body;
       if (!matchId || !winner) {
@@ -379,7 +396,7 @@ async function startServer() {
   });
 
   // Reset all matches to UPCOMING
-  app.post("/api/admin/reset-matches", verifyToken, async (req, res) => {
+  app.post("/api/admin/reset-matches", verifyToken, requireRole(Role.ADMINISTRADOR), async (req, res) => {
     try {
       await resetMatches();
       res.json({ success: true, message: "Partidos reiniciados con éxito." });

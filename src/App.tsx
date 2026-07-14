@@ -28,7 +28,7 @@ import {
   Flame,
   AlertCircle
 } from 'lucide-react';
-import { BetSide, MatchStatus, BetStatus, User as AppUser, Match, Bet, Transaction, BankDetails } from './types';
+import { BetSide, MatchStatus, BetStatus, Role, User as AppUser, Match, Bet, Transaction, BankDetails } from './types';
 import JuniorDevNotes from './components/JuniorDevNotes';
 
 export default function App() {
@@ -40,7 +40,9 @@ export default function App() {
 
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const stored = localStorage.getItem('astrobet_active_user');
-    return stored ? JSON.parse(stored) : null;
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (parsed && !parsed.role) parsed.role = Role.APOSTADOR;
+    return parsed;
   });
 
   const [matches, setMatches] = useState<Match[]>([]);
@@ -655,6 +657,9 @@ export default function App() {
                 <div className="text-left hidden sm:block">
                   <p className="font-semibold text-xs text-brand-light">{currentUser.fullName}</p>
                   <p className="text-[10px] text-brand-light/60 font-mono">@{currentUser.username}</p>
+                  <span className={`text-[9px] font-mono font-bold uppercase ${currentUser.role === Role.ADMINISTRADOR ? 'text-yellow-400' : currentUser.role === Role.AUDITOR ? 'text-blue-400' : 'text-green-400'}`}>
+                    {currentUser.role}
+                  </span>
                 </div>
                 <button
                   id="logout-btn"
@@ -1090,6 +1095,7 @@ export default function App() {
               </div>
 
               {/* JUNIOR DEV CHEAT / EMERGENCY RESET */}
+              {currentUser.role === Role.ADMINISTRADOR && (
               <div className="glass-panel rounded-2xl p-4 border border-brand-red/10 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Terminal className="w-5 h-5 text-brand-red" />
@@ -1103,6 +1109,7 @@ export default function App() {
                   Reiniciar Partidos 🔄
                 </button>
               </div>
+              )}
 
             </div>
 
@@ -1485,6 +1492,7 @@ export default function App() {
               </div>
 
               {/* ================= SECTION C: SYSTEM RESULT SIMULATOR (ADMIN PANEL) ================= */}
+              {currentUser.role === Role.ADMINISTRADOR && (
               <div className="glass-panel rounded-3xl p-6 border border-white/5 space-y-4">
                 
                 <div className="flex items-center gap-2 border-b border-brand-gray/20 pb-3">
@@ -1706,6 +1714,7 @@ export default function App() {
                 )}
 
               </div>
+              )}
 
             </div>
 
