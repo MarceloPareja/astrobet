@@ -29,7 +29,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { BetSide, MatchStatus, BetStatus, Role, User as AppUser, Match, Bet, Transaction, BankDetails } from './types';
-import JuniorDevNotes from './components/JuniorDevNotes';
+
 
 export default function App() {
   // --- STATE ---
@@ -152,9 +152,33 @@ export default function App() {
     }
   };
 
-  // On mount: load matches
+  // Refresh token silently
+  const refreshToken = async (): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/refresh-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: currentUser?.token })
+      });
+      const data = await res.json();
+      if (data.success && data.token) {
+        const updatedUser = { ...currentUser!, token: data.token };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('astrobet_active_user', JSON.stringify(updatedUser));
+        return data.token;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  // On mount: load matches and refresh token if stored
   useEffect(() => {
     fetchMatches();
+    if (currentUser?.token) {
+      refreshToken();
+    }
   }, []);
 
   // Polling data for real-time live engine updates
@@ -366,7 +390,6 @@ export default function App() {
           'Authorization': `Bearer ${currentUser.token}`
         },
         body: JSON.stringify({
-          userId: currentUser.id,
           matchId: selectedMatch.id,
           matchInfo: {
             homeTeam: selectedMatch.homeTeam,
@@ -428,7 +451,6 @@ export default function App() {
           'Authorization': `Bearer ${currentUser.token}`
         },
         body: JSON.stringify({
-          userId: currentUser.id,
           type,
           amount: amountNum
         })
@@ -635,22 +657,26 @@ export default function App() {
           {currentUser ? (
             <div className="flex flex-wrap items-center gap-4">
               
-              {/* Linked Bank Badge */}
-              <div className="hidden lg:flex items-center gap-2 bg-green-500/10 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg text-xs">
-                <Shield className="w-3.5 h-3.5" />
-                <span className="font-medium">Banco Vinculado: <strong className="font-bold">{currentUser.bankDetails?.bankName}</strong></span>
-              </div>
+              {currentUser.role !== Role.ADMINISTRADOR && (
+                <>
+                  {/* Linked Bank Badge */}
+                  <div className="hidden lg:flex items-center gap-2 bg-green-500/10 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg text-xs">
+                    <Shield className="w-3.5 h-3.5" />
+                    <span className="font-medium">Banco Vinculado: <strong className="font-bold">{currentUser.bankDetails?.bankName}</strong></span>
+                  </div>
 
-              {/* Balance Widget */}
-              <div className="flex items-center gap-3 bg-brand-gray/30 border border-brand-gray/50 p-1.5 pl-4 rounded-xl">
-                <div className="text-right">
-                  <p className="text-[10px] uppercase font-mono tracking-wider text-brand-light/60">Saldo Disponible</p>
-                  <p className="font-mono font-bold text-lg text-brand-light">${currentUser.balance.toFixed(2)}</p>
-                </div>
-                <div className="bg-gradient-to-br from-brand-red to-brand-dark-red p-2.5 rounded-lg glow-red-sm text-white">
-                  <Wallet className="w-5 h-5" />
-                </div>
-              </div>
+                  {/* Balance Widget */}
+                  <div className="flex items-center gap-3 bg-brand-gray/30 border border-brand-gray/50 p-1.5 pl-4 rounded-xl">
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase font-mono tracking-wider text-brand-light/60">Saldo Disponible</p>
+                      <p className="font-mono font-bold text-lg text-brand-light">${currentUser.balance.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-brand-red to-brand-dark-red p-2.5 rounded-lg glow-red-sm text-white">
+                      <Wallet className="w-5 h-5" />
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Profile/Logout */}
               <div className="flex items-center gap-2">
@@ -1038,7 +1064,13 @@ export default function App() {
                         </div>
 
                         {/* BETTING SELECTOR BUTTONS */}
-                        {!isFinished ? (
+                        {currentUser.role === Role.ADMINISTRADOR ? (
+                          <div className="bg-brand-gray/10 rounded-xl p-3 mt-4 text-center border border-yellow-500/30">
+                            <p className="text-xs font-mono text-yellow-400">
+                              ⚠️ Los administradores no pueden realizar apuestas
+                            </p>
+                          </div>
+                        ) : !isFinished ? (
                           <div className="grid grid-cols-2 gap-3 mt-5">
                             
                             {/* LEFT Team Bet Option Button */}
@@ -1117,6 +1149,7 @@ export default function App() {
             <div className="lg:col-span-5 space-y-6">
               
               {/* ================= SECTION A: SELECTED BET SLIP ================= */}
+              {currentUser.role !== Role.ADMINISTRADOR && (
               <div className="glass-panel rounded-3xl p-6 border border-brand-red/20 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-brand-red rounded-full blur-3xl filter opacity-10 pointer-events-none"></div>
 
@@ -1243,40 +1276,49 @@ export default function App() {
                 )}
 
               </div>
+              )}
 
               {/* ================= SECTION B: ACCOUNT PANEL tabs (BANK / BETS / TRANSACTIONS) ================= */}
               <div className="glass-panel rounded-3xl p-6 border border-white/5">
                 
                 {/* Tabs bar */}
                 <div className="flex flex-wrap gap-1 border-b border-brand-gray/20 pb-3 mb-4">
-                  <button
-                    id="tab-active-bets"
-                    onClick={() => setActiveAccountTab('BETS_ACTIVE')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'BETS_ACTIVE' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
-                  >
-                    Activas ({activeBets.length})
-                  </button>
-                  <button
-                    id="tab-history-bets"
-                    onClick={() => setActiveAccountTab('BETS_HISTORY')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'BETS_HISTORY' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
-                  >
-                    Historial ({historicBets.length})
-                  </button>
-                  <button
-                    id="tab-bank"
-                    onClick={() => setActiveAccountTab('BANK')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'BANK' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
-                  >
-                    🏦 Banco Falso
-                  </button>
-                  <button
-                    id="tab-txs"
-                    onClick={() => setActiveAccountTab('TRANSACTIONS')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'TRANSACTIONS' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
-                  >
-                    Extracto
-                  </button>
+                  {currentUser.role !== Role.ADMINISTRADOR && (
+                    <button
+                      id="tab-active-bets"
+                      onClick={() => setActiveAccountTab('BETS_ACTIVE')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'BETS_ACTIVE' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
+                    >
+                      Activas ({activeBets.length})
+                    </button>
+                  )}
+                  {currentUser.role !== Role.ADMINISTRADOR && (
+                    <button
+                      id="tab-history-bets"
+                      onClick={() => setActiveAccountTab('BETS_HISTORY')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'BETS_HISTORY' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
+                    >
+                      Historial ({historicBets.length})
+                    </button>
+                  )}
+                  {currentUser.role !== Role.ADMINISTRADOR && (
+                    <button
+                      id="tab-bank"
+                      onClick={() => setActiveAccountTab('BANK')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'BANK' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
+                    >
+                      🏦 Banco Falso
+                    </button>
+                  )}
+                  {currentUser.role !== Role.ADMINISTRADOR && (
+                    <button
+                      id="tab-txs"
+                      onClick={() => setActiveAccountTab('TRANSACTIONS')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeAccountTab === 'TRANSACTIONS' ? 'bg-brand-red text-white' : 'text-brand-light/60 hover:text-brand-light hover:bg-brand-gray/10'}`}
+                    >
+                      Extracto
+                    </button>
+                  )}
                 </div>
 
                 {/* Tab content */}
@@ -1722,9 +1764,6 @@ export default function App() {
         )}
 
       </main>
-
-      {/* FLOAT JUNIOR BITACORA WIDGET */}
-      <JuniorDevNotes />
 
     </div>
   );

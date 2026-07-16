@@ -25,6 +25,18 @@ export const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Limitador para registro (evita creación masiva de cuentas)
+export const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 3, // Máximo 3 registros por IP por hora
+  message: {
+    success: false,
+    error: 'Demasiados registros desde esta IP. Intenta de nuevo más tarde.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Sanitizador básico contra XSS y prototype pollution
 function sanitizeValue(val: any): any {
   if (typeof val === 'string') {

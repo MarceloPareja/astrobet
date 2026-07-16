@@ -4,9 +4,10 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import * as jose from "jose";
+import { createHash, randomUUID } from "crypto";
 import { logger } from "./logger";
-import { apiLimiter, loginLimiter, inputSanitizer } from "./security.middleware";
+import { apiLimiter, loginLimiter, registerLimiter, inputSanitizer } from "./security.middleware";
 import {
   getUserByUsername,
   getUserById,
@@ -26,8 +27,12 @@ import { User as AppUser, Match, Bet, Transaction, BetSide, MatchStatus, BetStat
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_astrobet';
 
-// Middleware to verify JWT token
-const verifyToken = (req: Request, res: Response, next: NextFunction) => {
+function getJweKey(): Uint8Array {
+  return new Uint8Array(createHash('sha256').update(JWT_SECRET).digest());
+}
+
+// Middleware to verify JWE token
+const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ success: false, error: "Acceso denegado. No se proporcionó un token." });
@@ -37,8 +42,8 @@ const verifyToken = (req: Request, res: Response, next: NextFunction) => {
     return res.status(401).json({ success: false, error: "Token inválido." });
   }
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    (req as any).user = decoded;
+    const { payload } = await jose.jwtDecrypt(token, getJweKey());
+    (req as any).user = payload;
     next();
   } catch (error) {
     return res.status(401).json({ success: false, error: "Token expirado o inválido." });
@@ -71,7 +76,7 @@ async function startServer() {
     allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
   }));
   app.use(apiLimiter);
-  app.use(express.json());
+  app.use(express.json({ limit: '1mb' }));
   app.use(inputSanitizer);
 
   // HTTP request logger
@@ -103,7 +108,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: "Datos de partido incompletos" });
       }
 
-      const matchId = "m_" + Date.now();
+      const matchId = "m_" + randomUUID();
       const newMatch: Match = {
         id: matchId,
         homeTeam: homeTeam.trim(),
@@ -126,12 +131,22 @@ async function startServer() {
   // Get user profile/balance
   app.get("/api/users/:userId", verifyToken, async (req, res) => {
     try {
-      const user = await getUserById(req.params.userId);
+      const tokenUser = (req as any).user;
+      const requestedUserId = req.params.userId;
+      if (tokenUser.id !== requestedUserId && tokenUser.role !== Role.ADMINISTRADOR) {
+        return res.status(403).json({ success: false, error: "No tienes permiso para ver este perfil." });
+      }
+
+      const user = await getUserById(requestedUserId);
       if (!user) {
         return res.status(404).json({ success: false, error: "Usuario no encontrado" });
       }
       const userToReturn = { ...user, role: user.role || Role.APOSTADOR };
       delete userToReturn.password;
+      // Only return bankDetails if the user is viewing their own profile
+      if (tokenUser.id !== requestedUserId) {
+        delete userToReturn.bankDetails;
+      }
       res.json({ success: true, user: userToReturn });
     } catch (err: any) {
       console.error("Error fetching user:", err);
@@ -140,7 +155,7 @@ async function startServer() {
   });
 
   // Register user
-  app.post("/api/register", async (req, res) => {
+  app.post("/api/register", registerLimiter, async (req, res) => {
     try {
       const { username, fullName, email, bankDetails, password } = req.body;
       if (!username || !fullName || !email || !bankDetails || !password) {
@@ -156,7 +171,7 @@ async function startServer() {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      const userId = "u_" + Date.now();
+      const userId = "u_" + randomUUID();
       const newUser: AppUser = {
         id: userId,
         username: username.trim().toLowerCase(),
@@ -172,7 +187,7 @@ async function startServer() {
 
       // Create welcome bonus transaction
       const welcomeTx: Transaction = {
-        id: "tx_" + Date.now(),
+        id: "tx_" + randomUUID(),
         userId: newUser.id,
         type: "DEPOSIT",
         amount: 500.00,
@@ -211,11 +226,11 @@ async function startServer() {
 
       const userRole = user.role || Role.APOSTADOR;
 
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: userRole },
-        JWT_SECRET,
-        { expiresIn: "24h" }
-      );
+      const token = await new jose.EncryptJWT({ id: user.id, username: user.username, role: userRole })
+        .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+        .setIssuedAt()
+        .setExpirationTime('24h')
+        .encrypt(getJweKey());
 
       const userToReturn = { ...user, role: userRole, token };
       delete userToReturn.password;
@@ -227,15 +242,45 @@ async function startServer() {
     }
   });
 
+  // Refresh token (extend expiration)
+  app.post("/api/refresh-token", async (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token) {
+        return res.status(400).json({ success: false, error: "Token requerido" });
+      }
+
+      const { payload } = await jose.jwtDecrypt(token, getJweKey());
+      if (!payload.id || !payload.username || !payload.role) {
+        return res.status(401).json({ success: false, error: "Token inválido" });
+      }
+
+      const newToken = await new jose.EncryptJWT({ id: payload.id, username: payload.username, role: payload.role })
+        .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
+        .setIssuedAt()
+        .setExpirationTime('24h')
+        .encrypt(getJweKey());
+
+      res.json({ success: true, token: newToken });
+    } catch (err: any) {
+      return res.status(401).json({ success: false, error: "Token expirado o inválido. Inicia sesión nuevamente." });
+    }
+  });
+
   // Place bet
   app.post("/api/bets", verifyToken, async (req, res) => {
     try {
-      const { userId, matchId, matchInfo, side, amount, potentialPayout } = req.body;
-      if (!userId || !matchId || !matchInfo || !side || !amount) {
+      const decoded = (req as any).user;
+      if (decoded.role === Role.ADMINISTRADOR) {
+        return res.status(403).json({ success: false, error: "Los administradores no pueden realizar apuestas" });
+      }
+
+      const { matchId, matchInfo, side, amount, potentialPayout } = req.body;
+      if (!decoded.id || !matchId || !matchInfo || !side || !amount) {
         return res.status(400).json({ success: false, error: "Datos de apuesta incompletos" });
       }
 
-      const user = await getUserById(userId);
+      const user = await getUserById(decoded.id);
       if (!user) {
         return res.status(404).json({ success: false, error: "Usuario no encontrado" });
       }
@@ -247,13 +292,13 @@ async function startServer() {
 
       // Deduct balance
       const newBalance = Number((user.balance - amountNum).toFixed(4));
-      await updateUserBalance(userId, newBalance);
+      await updateUserBalance(decoded.id, newBalance);
 
       // Create bet
-      const betId = "bet_" + Date.now();
+      const betId = "bet_" + randomUUID();
       const newBet: Bet = {
         id: betId,
-        userId,
+        userId: decoded.id,
         matchId,
         matchInfo,
         side,
@@ -266,8 +311,8 @@ async function startServer() {
 
       // Create transaction log
       const betTx: Transaction = {
-        id: "tx_b_" + Date.now(),
-        userId,
+        id: "tx_" + randomUUID(),
+        userId: decoded.id,
         type: "BET_PLACE",
         amount: amountNum,
         description: `Apuesta colocada al ${side === BetSide.LEFT ? matchInfo.homeTeam : matchInfo.awayTeam} (${matchInfo.homeTeam} vs ${matchInfo.awayTeam})`,
@@ -285,6 +330,10 @@ async function startServer() {
   // Get user's bets
   app.get("/api/bets/:userId", verifyToken, async (req, res) => {
     try {
+      const tokenUser = (req as any).user;
+      if (tokenUser.id !== req.params.userId && tokenUser.role !== Role.ADMINISTRADOR) {
+        return res.status(403).json({ success: false, error: "No tienes permiso para ver estas apuestas." });
+      }
       const bets = await getBets(req.params.userId);
       res.json({ success: true, bets });
     } catch (err: any) {
@@ -296,6 +345,10 @@ async function startServer() {
   // Get user's transactions
   app.get("/api/transactions/:userId", verifyToken, async (req, res) => {
     try {
+      const tokenUser = (req as any).user;
+      if (tokenUser.id !== req.params.userId && tokenUser.role !== Role.ADMINISTRADOR) {
+        return res.status(403).json({ success: false, error: "No tienes permiso para ver estas transacciones." });
+      }
       const transactions = await getTransactions(req.params.userId);
       res.json({ success: true, transactions });
     } catch (err: any) {
@@ -307,12 +360,13 @@ async function startServer() {
   // Simulated deposit/withdrawal
   app.post("/api/bank-action", verifyToken, async (req, res) => {
     try {
-      const { userId, type, amount } = req.body;
-      if (!userId || !type || !amount) {
+      const decoded = (req as any).user;
+      const { type, amount } = req.body;
+      if (!decoded.id || !type || !amount) {
         return res.status(400).json({ success: false, error: "Datos bancarios incompletos" });
       }
 
-      const user = await getUserById(userId);
+      const user = await getUserById(decoded.id);
       if (!user) {
         return res.status(404).json({ success: false, error: "Usuario no encontrado" });
       }
@@ -341,12 +395,12 @@ async function startServer() {
           }
 
           const finalBalanceFixed = Number(finalBalance.toFixed(4));
-          await updateUserBalance(userId, finalBalanceFixed);
+          await updateUserBalance(decoded.id, finalBalanceFixed);
 
           // Add transaction record
           const bankTx: Transaction = {
-            id: "tx_bk_" + Date.now(),
-            userId,
+            id: "tx_" + randomUUID(),
+            userId: decoded.id,
             type,
             amount: amountNum,
             description: txDesc,

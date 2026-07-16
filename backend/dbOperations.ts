@@ -10,6 +10,7 @@ import {
   runTransaction
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { randomUUID } from "crypto";
 import { User as AppUser, Match, Bet, Transaction, MatchStatus, BetStatus, BetSide } from "../src/types";
 import { INITIAL_MATCHES } from "../src/data/initialMatches";
 
@@ -182,7 +183,7 @@ export async function settleMatchBets(
 
         // Create transaction log
         const payoutTx: Transaction = {
-          id: 'tx_pay_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          id: 'tx_' + crypto.randomUUID(),
           userId: bet.userId,
           type: 'WIN_PAYOUT',
           amount: payoutAmount,

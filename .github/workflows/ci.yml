@@ -1,0 +1,76 @@
+name: CI — AstroBet
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  typecheck-and-build:
+    name: Type Check + Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint — tsc --noEmit
+        run: npm run lint
+        timeout-minutes: 3
+
+      - name: Build frontend — Vite
+        run: npm run build:frontend
+        timeout-minutes: 3
+
+      - name: Build backend — esbuild
+        run: npm run build:backend
+        timeout-minutes: 2
+
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Escribir config Firebase desde secret
+        id: firebase
+        run: |
+          if [ -n "${{ secrets.FIREBASE_CONFIG_JSON }}" ]; then
+            echo '${{ secrets.FIREBASE_CONFIG_JSON }}' > firebase-applet-config.json
+            echo "ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Ejecutar tests backend
+        if: steps.firebase.outputs.ready == 'true'
+        run: npm run test:backend
+        timeout-minutes: 30
+        env:
+          PORT: 3001
+
+      - name: Tests omitidos — sin Firebase config
+        if: steps.firebase.outputs.ready != 'true'
+        run: |
+          echo "::warning title=Firebase no configurado::"
+          echo "Tests omitidos. Define el secret 'FIREBASE_CONFIG_JSON'"
+          echo "con el contenido exacto de firebase-applet-config.json"
