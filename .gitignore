@@ -5,4 +5,7 @@ coverage/
 .DS_Store
 *.log
 .env*
-!.env.example
+.env.example
+metadata.json
+firebase-applet-config.json
+.env
