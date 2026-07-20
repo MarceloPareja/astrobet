@@ -277,6 +277,144 @@ Para activar los tests en CI, el administrador del repositorio debe:
 
 ---
 
+## 12. Docker — Hardening de Infraestructura
+
+### Archivos
+- `Dockerfile` — Build multi-stage con usuario no-root
+- `docker-compose.yml` — Orquestación con límites de recursos
+- `.dockerignore` — Exclusión de archivos sensibles del build context
+
+### Medidas Implementadas
+
+#### 12.1 Multi-stage Build
+
+```dockerfile
+# Etapa 1: build (incluye devDependencies)
+FROM node:22-alpine AS build
+COPY . .
+RUN npm ci && npm run build:frontend && npm run build:backend
+
+# Etapa 2: producción (solo producción dependencies)
+FROM node:22-alpine
+COPY --from=build /app/dist ./dist
+RUN npm ci --omit=dev
+```
+
+| Beneficio | Descripción |
+|---|---|
+| Imagen reducida | Solo `dist/` y prod deps (~150MB vs ~800MB) |
+| Sin código fuente | El build stage no persiste en la imagen final |
+| Sin devDependencies | Herramientas de build no llegan a producción |
+
+#### 12.2 Usuario No-Root
+
+```dockerfile
+RUN addgroup -g 1001 astrobet && \
+    adduser -u 1001 -G astrobet -s /bin/sh -D astrobet
+RUN chown -R astrobet:astrobet /app
+USER astrobet
+```
+
+| Riesgo mitigado | Cómo |
+|---|---|
+| Escalada de privilegios | El contenedor NO ejecuta como root |
+| Escritura en sistema | Usuario sin privilegios de administración |
+| RCE (Remote Code Execution) | Impacto reducido si se compromete el proceso |
+
+#### 12.3 Imagen Base Mínima
+
+```dockerfile
+FROM node:22-alpine
+```
+
+| Comparación | Tamaño |
+|---|---|
+| `node:22` (Debian full) | ~1GB |
+| `node:22-alpine` | ~50MB |
+
+Menor superficie de ataque = menos vulnerabilidades potenciales.
+
+#### 12.4 Health Check
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+```
+
+- Docker reinicia el contenedor automáticamente si falla 3 veces consecutivas
+- Detecta caídas del servidor Node.js sin intervención manual
+
+#### 12.5 Límites de Recursos (docker-compose.yml)
+
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 512M
+      cpus: "1.0"
+```
+
+| Protección | Efecto |
+|---|---|
+| Memoria | Evita OOM que afecte al host |
+| CPU | Previene denial of service por consumo excesivo |
+
+#### 12.6 Exclusión de Archivos Sensibles (.dockerignore)
+
+```
+.env
+.env.*
+.git/
+logs/
+```
+
+- Secrets `.env` nunca entran en el build context de Docker
+- Historial git no se expone en la imagen
+- Logs acumulados no se duplican
+
+#### 12.7 Secrets via Variables de Entorno
+
+```yaml
+environment:
+  - JWT_SECRET=${JWT_SECRET:-super_secret_change_me}
+```
+
+- `JWT_SECRET` se inyecta desde el entorno, no hardcodeado en la imagen
+- En producción: usar Docker secrets o vault externo
+
+### Resumen de Protección Docker
+
+```
+Host
+  │
+  ▼
+┌──────────────────────────────┐
+│ Docker Compose                │
+│  ├─ Resource limits (512M)   │  Anti-DoS por recursos
+│  ├─ Restart policy           │  Auto-recuperación
+│  └─ JWT_SECRET from env      │  Secrets fuera de imagen
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Dockerfile (imagen)           │
+│  ├─ Alpine (~50MB)            │  Superficie de ataque mínima
+│  ├─ Non-root user             │  Sin privilegios de root
+│  ├─ Multi-stage build         │  Sin código fuente/devDeps
+│  └─ Health check              │  Detección de fallos
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Express (server.ts)           │
+│  ├─ Helmet, CORS, Rate Limit  │  Capa de aplicación
+│  ├─ Input Sanitizer, JWE Auth │
+│  └─ RBAC, Logging             │
+└──────────────────────────────┘
+```
+
+---
+
 ## Resumen de Capas de Seguridad
 
 ```
@@ -284,6 +422,8 @@ Request entrante
     │
     ▼
 ┌─────────────────────────┐
+│ 0. Docker Hardening      │  Non-root, Alpine, Resource Limits
+├─────────────────────────┤
 │ 1. Helmet               │  Headers de seguridad HTTP
 ├─────────────────────────┤
 │ 2. CORS                  │  Origen permitido
