@@ -1,0 +1,19 @@
+services:
+  astrobet:
+    build: .
+    container_name: astrobet
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - SERVE_STATIC=true
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:jdfjdfkd5ej8k9c3a21w898fff2x1g4j1smgla65411v4}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"

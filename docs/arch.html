@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AstroBet - Explorador de Arquitectura, Conexiones y Puertos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #ffffff;
+      color: #000000;
+    }
+    
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Animación de flujo plano y sólido (sin neones/glows) */
+    .flow-line {
+      stroke-dasharray: 6, 6;
+      animation: dash-flat 15s linear infinite;
+    }
+    
+    @keyframes dash-flat {
+      to {
+        stroke-dashoffset: -500;
+      }
+    }
+    
+    .node-interactive {
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    
+    .node-interactive:hover {
+      transform: translateY(-2px);
+    }
+
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #ffffff;
+      border-left: 1px solid #000000;
+    }
+    
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #000000;
+      border: 1px solid #ffffff;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-black selection:text-white overflow-x-hidden">
+
+  <!-- Header -->
+  <header class="border-b-2 border-black bg-white px-6 py-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4 sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="p-2 bg-white text-black rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-xl font-extrabold tracking-tight text-black flex items-center gap-2">
+          AstroBet <span class="text-[11px] tracking-wider uppercase px-2 py-0.5 bg-black text-white rounded font-bold">Mapa de Red & Puertos</span>
+        </h1>
+        <p class="text-xs text-stone-600">Esquema físico-lógico de conexiones entre el Cliente React, Proxy de Red, API Express y Persistence Cloud NoSQL</p>
+      </div>
+    </div>
+    
+    <!-- Red Status & Global Stack Ports (Flat Design) -->
+    <div class="flex flex-wrap items-center gap-2 text-xs">
+      <div class="bg-white border-2 border-black px-3 py-1 rounded flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full border border-black" style="background-color: #421bda;"></span>
+        <span>Cliente SPA <strong class="font-mono text-black">:5173</strong></span>
+      </div>
+      <div class="bg-white border-2 border-black px-3 py-1 rounded flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full border border-black" style="background-color: #d61a4b;"></span>
+        <span>API Gateway / Proxy <strong class="font-mono text-black">:80 / :443</strong></span>
+      </div>
+      <div class="bg-white border-2 border-black px-3 py-1 rounded flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full border border-black" style="background-color: #19ae2e;"></span>
+        <span>Express Server <strong class="font-mono text-black">:3000</strong></span>
+      </div>
+      <div class="bg-white border-2 border-black px-3 py-1 rounded flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full border border-black" style="background-color: #d7f024;"></span>
+        <span>Cloud Database <strong class="font-mono text-black">:443 TLS</strong></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 max-w-[1800px] mx-auto w-full">
+    
+    <!-- Left Panel: Flow Controller & Files Tree (3 Cols) -->
+    <section class="lg:col-span-3 flex flex-col gap-6">
+      
+      <!-- Flow Control Hub -->
+      <div class="bg-white border-2 border-black rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <h2 class="text-sm font-extrabold text-black mb-2 flex items-center gap-2 uppercase">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          Flujos de Conectividad
+        </h2>
+        <p class="text-xs text-stone-600 mb-4">Haz clic para encender y simular la ruta del tráfico de red entre los puertos del sistema:</p>
+        
+        <div class="flex flex-col gap-2.5">
+          <!-- Flow 1 Button -->
+          <button onclick="activateFlow('auth')" id="btn-flow-auth" class="w-full text-left px-3 py-3 rounded border-2 border-black bg-white hover:bg-stone-50 transition-all flex items-start gap-3 group">
+            <span class="p-2 border border-black rounded text-white" style="background-color: #421bda;">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+            </span>
+            <div>
+              <div class="text-xs font-extrabold text-black">1. Autenticación & JWE</div>
+              <div class="text-[10px] text-stone-500 mt-0.5 font-mono">Vite Client → Proxy → Express → DB</div>
+            </div>
+          </button>
+
+          <!-- Flow 2 Button -->
+          <button onclick="activateFlow('bet')" id="btn-flow-bet" class="w-full text-left px-3 py-3 rounded border-2 border-black bg-white hover:bg-stone-50 transition-all flex items-start gap-3 group">
+            <span class="p-2 border border-black rounded text-white" style="background-color: #19ae2e;">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </span>
+            <div>
+              <div class="text-xs font-extrabold text-black">2. Transacción de Apuestas</div>
+              <div class="text-[10px] text-stone-500 mt-0.5 font-mono">Client → Proxy → Settle Engine → DB Commit</div>
+            </div>
+          </button>
+
+          <!-- Flow 3 Button -->
+          <button onclick="activateFlow('admin')" id="btn-flow-admin" class="w-full text-left px-3 py-3 rounded border-2 border-black bg-white hover:bg-stone-50 transition-all flex items-start gap-3 group">
+            <span class="p-2 border border-black rounded text-white" style="background-color: #d61a4b;">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+            </span>
+            <div>
+              <div class="text-xs font-extrabold text-black">3. Auditoría e Historial de Caja</div>
+              <div class="text-[10px] text-stone-500 mt-0.5 font-mono">TLS Connection → Admin Role → DB Stream</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Directory Tree Module -->
+      <div class="bg-white border-2 border-black rounded-xl p-5 flex-1 flex flex-col min-h-[320px] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <h2 class="text-sm font-extrabold text-black mb-3 flex items-center gap-2 uppercase">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+          Estructura de Archivos
+        </h2>
+        
+        <div class="flex-1 overflow-y-auto scrollbar-thin text-xs font-mono space-y-1.5 pr-1" id="file-tree">
+          <div class="hover:bg-stone-100 p-1.5 rounded cursor-pointer select-none transition border border-transparent hover:border-black" onclick="toggleDir('astrobet-tree')">
+            📂 <span class="font-bold text-black">astrobet/</span>
+          </div>
+          
+          <div id="astrobet-tree" class="pl-4 border-l border-black/30 space-y-1.5">
+            <!-- Backend -->
+            <div class="hover:bg-stone-100 p-1.5 rounded cursor-pointer select-none transition border border-transparent hover:border-black" onclick="toggleDir('backend-tree')">
+              📂 <span class="font-bold" style="color: #19ae2e;">backend/</span> <span class="text-[10px] text-stone-500">(:3000)</span>
+            </div>
+            <div id="backend-tree" class="pl-4 border-l border-black/30 space-y-1.5">
+              <div class="hover:bg-stone-50 p-1.5 rounded cursor-pointer flex items-center justify-between text-black border border-transparent hover:border-black transition" onclick="inspectFile('server.ts')">
+                <span>📄 server.ts</span> <span class="text-[9px] px-1.5 py-0.5 rounded border border-black font-bold" style="background-color: #d7f024;">Express Core</span>
+              </div>
+              <div class="hover:bg-stone-50 p-1.5 rounded cursor-pointer flex items-center justify-between text-black border border-transparent hover:border-black transition" onclick="inspectFile('dbOperations.ts')">
+                <span>📄 dbOperations.ts</span> <span class="text-[9px] px-1.5 py-0.5 rounded border border-black font-bold" style="background-color: #d7f024;">Admin SDK</span>
+              </div>
+              <div class="hover:bg-stone-50 p-1.5 rounded cursor-pointer flex items-center justify-between text-black border border-transparent hover:border-black transition" onclick="inspectFile('security.middleware.ts')">
+                <span>📄 security.middleware.ts</span> <span class="text-[9px] px-1.5 py-0.5 rounded border border-black font-bold text-white" style="background-color: #d61a4b;">CORS / Rate</span>
+              </div>
+            </div>
+
+            <!-- React Frontend -->
+            <div class="hover:bg-stone-100 p-1.5 rounded cursor-pointer select-none transition border border-transparent hover:border-black" onclick="toggleDir('src-tree')">
+              📂 <span class="font-bold" style="color: #421bda;">src/</span> <span class="text-[10px] text-stone-500 font-mono">(:5173)</span>
+            </div>
+            <div id="src-tree" class="pl-4 border-l border-black/30 space-y-1.5">
+              <div class="hover:bg-stone-50 p-1.5 rounded cursor-pointer flex items-center justify-between text-black border border-transparent hover:border-black transition" onclick="inspectFile('App.tsx')">
+                <span>📄 App.tsx</span> <span class="text-[9px] text-white px-1.5 py-0.5 rounded border border-black font-bold" style="background-color: #421bda;">React Root</span>
+              </div>
+              <div class="hover:bg-stone-50 p-1.5 rounded cursor-pointer flex items-center justify-between text-black border border-transparent hover:border-black transition" onclick="inspectFile('vite.config.ts')">
+                <span>📄 vite.config.ts</span> <span class="text-[9px] px-1.5 py-0.5 rounded border border-black bg-stone-100 font-bold">Vite Proxy</span>
+              </div>
+            </div>
+
+            <div class="p-1 rounded text-stone-400 flex items-center gap-1 select-none pl-2">
+              <span>📄 package.json</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Center Panel: Interactive Map (6 Cols) -->
+    <section class="lg:col-span-6 flex flex-col gap-6">
+      <div class="bg-white border-2 border-black rounded-xl p-5 flex-1 flex flex-col relative shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] min-h-[500px]">
+        
+        <!-- Canvas Header Banner -->
+        <div class="absolute top-4 left-4 z-10 flex items-center gap-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-black px-2.5 py-1 bg-white border-2 border-black rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+            Esquema Físico y Lógico
+          </span>
+        </div>
+        
+        <div class="absolute top-4 right-4 z-10">
+          <button onclick="resetAllFlows()" class="text-xs px-3 py-1 bg-white hover:bg-stone-50 text-black font-extrabold rounded border-2 border-black transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18.22"></path></svg>
+            Reiniciar
+          </button>
+        </div>
+
+        <!-- System Architecture Canvas (SVG) - Colores Sólidos e Integrados -->
+        <div class="flex-1 flex items-center justify-center py-6 mt-4">
+          <svg viewBox="0 0 800 600" class="w-full h-full max-h-[520px]" id="architecture-svg">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#000000" />
+              </marker>
+              <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#421bda" />
+              </marker>
+            </defs>
+
+            <!-- Grid de fondo plano y sutil -->
+            <g stroke="#e5e5e5" stroke-width="1">
+              <line x1="0" y1="100" x2="800" y2="100" />
+              <line x1="0" y1="200" x2="800" y2="200" />
+              <line x1="0" y1="300" x2="800" y2="300" />
+              <line x1="0" y1="400" x2="800" y2="400" />
+              <line x1="0" y1="500" x2="800" y2="500" />
+              <line x1="200" y1="0" x2="200" y2="600" />
+              <line x1="400" y1="0" x2="400" y2="600" />
+              <line x1="600" y1="0" x2="600" y2="600" />
+            </g>
+
+            <!-- CAPA 1: CLIENTES SPA (Vite Client) -->
+            <g id="node-frontend" class="node-interactive cursor-pointer" onclick="inspectNode('frontend')">
+              <rect x="220" y="30" width="360" height="85" rx="8" fill="#ffffff" stroke="#000000" stroke-width="2" id="box-frontend" />
+              <rect x="220" y="30" width="360" height="28" rx="8" fill="#421bda" />
+              <!-- Ajuste de esquinas del header interior del nodo -->
+              <rect x="220" y="35" width="360" height="23" fill="#421bda" />
+              <text x="240" y="48" fill="#ffffff" font-size="11" font-family="monospace" font-weight="bold">CLIENTE SPA (Navegador)</text>
+              <text x="240" y="90" fill="#000000" font-size="16" font-weight="extrabold">React 19 + TypeScript (Vite)</text>
+              
+              <!-- Puerto -->
+              <rect x="510" y="72" width="55" height="18" rx="4" fill="#ffffff" stroke="#000000" stroke-width="1.5" />
+              <text x="537" y="85" fill="#421bda" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">:5173</text>
+            </g>
+
+            <!-- CONECTOR 1: CLIENT -> PROXY -->
+            <path d="M 400 115 L 400 175" stroke="#000000" stroke-width="2" fill="none" marker-end="url(#arrow)" id="path-front-proxy" />
+            <text x="410" y="145" fill="#000000" font-size="10" font-family="monospace" font-weight="bold">HTTP / WS (HMR)</text>
+
+            <!-- CAPA 2: API GATEWAY & SECURITY PROXY -->
+            <g id="node-proxy" class="node-interactive cursor-pointer" onclick="inspectNode('proxy')">
+              <rect x="250" y="175" width="300" height="65" rx="8" fill="#ffffff" stroke="#000000" stroke-width="2" id="box-proxy" />
+              <!-- Puerto localizador del proxy -->
+              <rect x="250" y="175" width="6" height="65" rx="2" fill="#d61a4b" />
+              <text x="270" y="200" fill="#d61a4b" font-size="12" font-family="monospace" font-weight="extrabold">Vite Reverse Proxy</text>
+              <text x="270" y="222" fill="#000000" font-size="11" font-weight="bold">Redirecciona /api/* → Puerto :3000</text>
+              
+              <!-- Puerto -->
+              <rect x="490" y="185" width="45" height="18" rx="4" fill="#ffffff" stroke="#000000" stroke-width="1.5" />
+              <text x="512" y="198" fill="#d61a4b" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">:80</text>
+            </g>
+
+            <!-- CONECTOR 2: PROXY -> BACKEND EXPRESS -->
+            <path d="M 400 240 L 400 300" stroke="#000000" stroke-width="2" fill="none" marker-end="url(#arrow)" id="path-proxy-back" />
+            <text x="410" y="270" fill="#000000" font-size="10" font-family="monospace" font-weight="bold">Proxy Pass HTTP</text>
+
+            <!-- CAPA 3: EXPRESS SERVER BACKEND -->
+            <g id="node-backend" class="node-interactive cursor-pointer" onclick="inspectNode('backend')">
+              <rect x="150" y="300" width="500" height="150" rx="8" fill="#ffffff" stroke="#000000" stroke-width="2" id="box-backend" />
+              <rect x="150" y="300" width="500" height="28" rx="8" fill="#19ae2e" />
+              <!-- Ajuste de esquinas del header interior del nodo -->
+              <rect x="150" y="305" width="500" height="23" fill="#19ae2e" />
+              <text x="170" y="318" fill="#ffffff" font-size="11" font-family="monospace" font-weight="bold">API SERVER - EXPRESS NODE</text>
+              
+              <!-- Sub-módulos lógicos estructurados en plano -->
+              <rect x="170" y="340" width="220" height="40" rx="4" fill="#ffffff" stroke="#000000" stroke-width="1.5" id="box-shield" />
+              <text x="182" y="364" fill="#d61a4b" font-size="11" font-weight="bold">🛡️ Shield Stack (CORS / Rate)</text>
+
+              <rect x="410" y="340" width="220" height="40" rx="4" fill="#ffffff" stroke="#000000" stroke-width="1.5" id="box-auth" />
+              <text x="422" y="364" fill="#421bda" font-size="11" font-weight="bold">🔑 JOSE / JWE Stack</text>
+
+              <rect x="170" y="392" width="460" height="45" rx="4" fill="#ffffff" stroke="#000000" stroke-width="1.5" id="box-logic" />
+              <text x="182" y="413" fill="#19ae2e" font-size="11" font-weight="bold">⚙️ Settle Engine & Transacciones Atómicas</text>
+              <text x="182" y="428" fill="#555555" font-size="9" font-weight="bold">reglas de usuario, liquidación de apuestas</text>
+
+              <!-- Puerto -->
+              <rect x="580" y="305" width="55" height="18" rx="4" fill="#ffffff" stroke="#000000" stroke-width="1.5" />
+              <text x="607" y="318" fill="#19ae2e" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">:3000</text>
+            </g>
+
+            <!-- CONECTOR 3: EXPRESS -> CLOUD PERSISTENCE -->
+            <path d="M 400 450 L 400 500" stroke="#000000" stroke-width="2" fill="none" marker-end="url(#arrow)" id="path-back-db" />
+            <text x="410" y="478" fill="#000000" font-size="10" font-family="monospace" font-weight="bold">gRPC TLS (HTTP/2)</text>
+
+            <!-- CAPA 4: CLOUD PERSISTENCE (FIRESTORE) -->
+            <g id="node-firestore" class="node-interactive cursor-pointer" onclick="inspectNode('firestore')">
+              <rect x="200" y="500" width="400" height="85" rx="8" fill="#ffffff" stroke="#000000" stroke-width="2" id="box-firestore" />
+              <rect x="200" y="500" width="400" height="28" rx="8" fill="#d7f024" />
+              <!-- Ajuste de esquinas del header interior del nodo -->
+              <rect x="200" y="505" width="400" height="23" fill="#d7f024" />
+              <text x="220" y="518" fill="#000000" font-size="11" font-family="monospace" font-weight="bold">PERSISTENCE - PERSISTENCIA CLOUD</text>
+              <text x="220" y="555" fill="#000000" font-size="16" font-weight="extrabold">Firebase Cloud Firestore</text>
+              
+              <!-- Puerto -->
+              <rect x="530" y="505" width="55" height="18" rx="4" fill="#ffffff" stroke="#000000" stroke-width="1.5" />
+              <text x="557" y="518" fill="#000000" font-size="10" font-family="monospace" font-weight="bold" text-anchor="middle">:443</text>
+            </g>
+
+            <!-- OVERLAYS PARA TRÁFICO ACTIVO (Plano, sin neón) -->
+            <path d="M 400 115 L 400 175 M 400 240 L 400 300 M 400 450 L 400 500" stroke="transparent" stroke-width="4" fill="none" id="overlay-auth-flow" />
+            <path d="M 400 115 L 400 175 M 400 240 L 400 300" stroke="transparent" stroke-width="4" fill="none" id="overlay-bet-flow-p1" />
+            <path d="M 400 450 L 400 500" stroke="transparent" stroke-width="4" fill="none" id="overlay-bet-flow-p2" />
+          </svg>
+        </div>
+
+        <!-- Live Debug Output / Network Log -->
+        <div class="mt-auto bg-stone-50 border-2 border-black p-3 rounded text-xs flex items-center justify-between" id="flow-status-box">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-black border border-white"></span>
+            <span class="font-extrabold font-mono text-black uppercase">Consola de Conexiones:</span>
+            <span class="text-stone-700 font-medium" id="live-console-msg">Esperando inspección o flujo para comenzar...</span>
+          </div>
+          <span class="text-[10px] text-stone-500 font-mono font-bold hidden md:inline">TCP/IP Activo</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Panel: Connection Matrix & Details (3 Cols) -->
+    <section class="lg:col-span-3 flex flex-col gap-6">
+      
+      <!-- Connection Port Matrix -->
+      <div class="bg-white border-2 border-black rounded-xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <h2 class="text-sm font-extrabold text-black mb-3 flex items-center gap-2 uppercase">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          Matriz de Red y Puertos
+        </h2>
+        
+        <div class="space-y-2 max-h-[220px] overflow-y-auto scrollbar-thin pr-1 text-[11px] font-mono">
+          <!-- Port Row 5173 -->
+          <div onclick="inspectPort('5173')" class="p-2 rounded bg-white border border-black hover:bg-stone-50 cursor-pointer transition flex justify-between items-center">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 border border-black rounded-full" style="background-color: #421bda;"></span>
+              <span class="font-extrabold text-black">:5173</span>
+            </div>
+            <span class="text-stone-600 font-bold">React SPA</span>
+            <span class="text-white text-[9px] font-bold px-1.5 py-0.5 rounded border border-black" style="background-color: #421bda;">HMR</span>
+          </div>
+
+          <!-- Port Row 80/443 -->
+          <div onclick="inspectPort('80')" class="p-2 rounded bg-white border border-black hover:bg-stone-50 cursor-pointer transition flex justify-between items-center">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 border border-black rounded-full" style="background-color: #d61a4b;"></span>
+              <span class="font-extrabold text-black">:80 / :443</span>
+            </div>
+            <span class="text-stone-600 font-bold">Gateway Proxy</span>
+            <span class="text-white text-[9px] font-bold px-1.5 py-0.5 rounded border border-black" style="background-color: #d61a4b;">HTTP</span>
+          </div>
+
+          <!-- Port Row 3000 -->
+          <div onclick="inspectPort('3000')" class="p-2 rounded bg-white border border-black hover:bg-stone-50 cursor-pointer transition flex justify-between items-center">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 border border-black rounded-full" style="background-color: #19ae2e;"></span>
+              <span class="font-extrabold text-black">:3000</span>
+            </div>
+            <span class="text-stone-600 font-bold">Express Server</span>
+            <span class="text-white text-[9px] font-bold px-1.5 py-0.5 rounded border border-black" style="background-color: #19ae2e;">REST</span>
+          </div>
+
+          <!-- Port Row 443 DB -->
+          <div onclick="inspectPort('443')" class="p-2 rounded bg-white border border-black hover:bg-stone-50 cursor-pointer transition flex justify-between items-center">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 border border-black rounded-full" style="background-color: #d7f024;"></span>
+              <span class="font-extrabold text-black">:443 TLS</span>
+            </div>
+            <span class="text-stone-600 font-bold">Firestore NoSQL</span>
+            <span class="text-black text-[9px] font-bold px-1.5 py-0.5 rounded border border-black" style="background-color: #d7f024;">gRPC</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Technology / Endpoint Details Inspector -->
+      <div class="bg-white border-2 border-black rounded-xl p-5 flex-1 flex flex-col shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] min-h-[300px]">
+        <h2 class="text-sm font-extrabold text-black mb-3 flex items-center gap-2 uppercase">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          Consola del Inspector
+        </h2>
+        
+        <div class="flex-1 overflow-y-auto scrollbar-thin text-xs space-y-4 pr-1" id="inspector-content">
+          <div class="space-y-3">
+            <p class="text-stone-600 leading-relaxed font-medium">Selecciona un puerto o un bloque en el diagrama para ver cómo se conecta, los protocolos de transmisión de datos que utiliza y las tecnologías del stack de AstroBet.</p>
+            
+            <div class="border-t-2 border-black pt-3.5">
+              <h3 class="text-black font-extrabold text-xs mb-2 uppercase">Puntos Críticos de Red:</h3>
+              <ul class="space-y-2.5 text-stone-700 text-[11px] list-none">
+                <li class="flex items-start gap-2 font-medium">
+                  <span class="font-bold" style="color: #19ae2e;">✔</span>
+                  <span><strong>Proxy Local:</strong> En desarrollo, Vite redirige las peticiones al puerto 3000 previniendo incidentes de CORS.</span>
+                </li>
+                <li class="flex items-start gap-2 font-medium">
+                  <span class="font-bold" style="color: #19ae2e;">✔</span>
+                  <span><strong>JWE Cifrado:</strong> Las respuestas de autenticación viajan con cargas cifradas que el navegador no puede descifrar sin permisos.</span>
+                </li>
+                <li class="flex items-start gap-2 font-medium">
+                  <span class="font-bold" style="color: #19ae2e;">✔</span>
+                  <span><strong>Transacción Firestore:</strong> Asegura la coherencia del balance al deducir o acreditar fondos deportivos de forma atómica.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t-2 border-black bg-white text-stone-500 px-6 py-4 text-xs flex flex-col md:flex-row justify-between items-center gap-2 mt-auto font-medium">
+    <span>© 2026 AstroBet Ltd. Todos los derechos reservados. Diseño y Flujos Auditados.</span>
+    <div class="flex items-center gap-4 text-[10px] font-mono text-black font-bold">
+      <span>CLIENTE_VITE: ES5173</span>
+      <span>API_EXPRESS: PORT3000</span>
+      <span>FIRESTORE: GRPC_HTTPS_443</span>
+    </div>
+  </footer>
+
+  <!-- Controller Script -->
+  <script>
+    // State management
+    let activeFlow = 'none';
+
+    // File templates content for preview inside inspector
+    const filesData = {
+      'server.ts': {
+        title: 'server.ts',
+        tag: 'Backend Core Endpoint',
+        port: ':3000',
+        desc: 'El archivo de entrada principal de nuestro servidor Express. Levanta la conexión TCP en el puerto 3000, inyecta middlewares globales y define las rutas de la API (/api/auth, /api/bets).',
+        details: [
+          'Configura la inicialización de Firebase Admin SDK.',
+          'Define el Settle Engine para cálculo concurrente de recompensas por cuota.',
+          'Usa CORS habilitando el origen exclusivo del cliente react en desarrollo.'
+        ]
+      },
+      'dbOperations.ts': {
+        title: 'dbOperations.ts',
+        tag: 'Firestore SDK Transactions',
+        port: ':443 gRPC',
+        desc: 'Contiene las llamadas autorizadas directas utilizando Firebase Admin SDK de forma nativa. Garantiza que las modificaciones de balances de usuarios y tickets de apuestas se hagan de forma atómica.',
+        details: [
+          'Usa transactions (db.runTransaction) para prevenir condiciones de carrera.',
+          'Conecta mediante gRPC TLS seguro directamente con la nube de Google.'
+        ]
+      },
+      'security.middleware.ts': {
+        title: 'security.middleware.ts',
+        tag: 'Filtro & Protección',
+        port: ':3000',
+        desc: 'Componente que intercepta todos los requests entrantes. Sanitiza inputs, restringe tasas de transferencia (Rate Limits) y valida las cabeceras HTTP.',
+        details: [
+          'Rate limit: Máximo 120 peticiones por minuto por IP.',
+          'Helmet integration para mitigar ataques XSS e inyecciones básicas.'
+        ]
+      },
+      'App.tsx': {
+        title: 'App.tsx',
+        tag: 'Frontend Root Single Page',
+        port: ':5173',
+        desc: 'Componente React SPA que gestiona el estado de autenticación, balance, partidos interactivos en vivo y tickets de apuestas.',
+        details: [
+          'Realiza peticiones asíncronas hacia el proxy local en la ruta /api.',
+          'Renderiza componentes de visualización y layouts interactivos.'
+        ]
+      },
+      'vite.config.ts': {
+        title: 'vite.config.ts',
+        tag: 'Vite Bundler Config',
+        port: ':5173 → :3000',
+        desc: 'Configuración del motor de construcción. Incluye un proxy de red de desarrollo para redirigir las llamadas "/api" hacia el servidor local Express en el puerto 3000, evitando problemas de CORS en localhost.',
+        details: [
+          'Inyecta el plugin de React y TypeScript.',
+          'Configura el puerto de escucha por defecto en el 5173.'
+        ]
+      }
+    };
+
+    // Node Information Data for Canvas Groups
+    const nodeDetails = {
+      'frontend': {
+        title: 'Cliente SPA (React 19 + Vite)',
+        port: 'Puerto local :5173',
+        protocol: 'HTTP + WebSocket (HMR)',
+        desc: 'La interfaz gráfica de usuario desde la cual los apostadores acceden a partidos, cuotas e historiales de caja.',
+        bulletPoints: [
+          'Se sirve localmente en el puerto 5173 (Dev).',
+          'Utiliza TypeScript estricto para evitar errores de tipo en las interfaces de apuestas.',
+          'Realiza peticiones asíncronas aisladas mediante endpoints REST.',
+          'Se comunica con el servidor backend por medio del API Gateway / Proxy.'
+        ]
+      },
+      'proxy': {
+        title: 'Vite Reverse Proxy (Redirección)',
+        port: 'Puerto :80 / :5173 de origen',
+        protocol: 'HTTP TCP Forwarding',
+        desc: 'Capa intermedia que unifica la comunicación. En producción suele reemplazarse por un balanceador de carga o un proxy inverso de Nginx.',
+        bulletPoints: [
+          'Escucha peticiones en el host del front-end.',
+          'Detecta el prefijo de ruta "/api" y lo redirige automáticamente al backend en el puerto 3000.',
+          'Evita bloqueos de origen cruzado (CORS) durante el flujo de desarrollo local.'
+        ]
+      },
+      'backend': {
+        title: 'API Server (Express Node.js)',
+        port: 'Puerto :3000',
+        protocol: 'HTTP REST API',
+        desc: 'El núcleo lógico del sistema. Administra la seguridad, autenticación, procesamiento de apuestas deportivas y el motor de liquidación de cuotas (Settle Engine).',
+        bulletPoints: [
+          'Middleware CORS y Shield Stack pre-integrados.',
+          'Desencriptación simétrica JWE con AES-GCM-256.',
+          'Ejecuta transacciones multi-documento a través del SDK Autorizado de Firebase.'
+        ]
+      },
+      'firestore': {
+        title: 'Google Cloud Firestore',
+        port: 'Puerto :443 (Salida Directa)',
+        protocol: 'gRPC sobre TLS (HTTP/2)',
+        desc: 'Persistencia de datos Cloud NoSQL en tiempo real, totalmente gestionada por Google Cloud.',
+        bulletPoints: [
+          'Escucha peticiones autorizadas por la IP del servidor de Express a través del puerto 443.',
+          'Permite la indexación masiva de usuarios, bets, matches y transacciones financieras.',
+          'Ofrece escalabilidad automática nativa y aislamiento de sandbox.'
+        ]
+      }
+    };
+
+    // Port Details for matrix click events
+    const portDetails = {
+      '5173': {
+        number: ':5173',
+        protocol: 'HTTP / WebSocket',
+        service: 'Vite Dev Server (Frontend Client)',
+        desc: 'Puerto encargado de compilar y servir la aplicación web en tiempo real. A través de este canal de red se distribuyen los assets estáticos (HTML, JS, CSS) y se mantiene el websocket para Hot Module Replacement (HMR).',
+        sec: 'Solo visible en red interna de desarrollo. En producción se despliega mediante CDN con HTTPS en puerto 443.'
+      },
+      '80': {
+        number: ':80 / :443',
+        protocol: 'HTTP / HTTPS (SSL/TLS)',
+        service: 'Nginx / Vite Gateway Reverse Proxy',
+        desc: 'Actúa como el único punto de entrada de red público. Recibe peticiones HTTP, realiza la descarga TLS y delega las tareas lógicas al servidor interno apropiado según la regla de URI (ej: /api/* → Puerto :3000).',
+        sec: 'Aplica cabeceras de protección, redirección forzada a HTTPS y filtrado inicial de seguridad.'
+      },
+      '3000': {
+        number: ':3000',
+        protocol: 'HTTP REST Server',
+        service: 'Express TypeScript Server Instance',
+        desc: 'Escucha de forma privada en el puerto 3000. Recibe los payloads limpios delegados por el proxy inverso para procesar los flujos de negocio tales como depósitos, colocación de boletos y login corporativo.',
+        sec: 'No debe exponerse públicamente. Solo debe aceptar tráfico reenviado por el proxy o API gateway.'
+      },
+      '443': {
+        number: ':443 TLS',
+        protocol: 'gRPC over HTTP/2',
+        service: 'Google Firebase API Connection',
+        desc: 'Canal de salida de alto rendimiento que conecta el servidor Express local con la base de datos Firestore en Google Cloud. El protocolo gRPC permite la transmisión de flujos de datos multiplexados con bajísima latencia.',
+        sec: 'Todas las conexiones están encriptadas mediante TLS y autenticadas por un archivo de llaves SA de Google IAM.'
+      }
+    };
+
+    // Directory navigation
+    function toggleDir(id) {
+      const tree = document.getElementById(id);
+      tree.classList.toggle('hidden');
+    }
+
+    // Inspect files logic
+    function inspectFile(fileName) {
+      const file = filesData[fileName];
+      if (!file) return;
+
+      const inspector = document.getElementById('inspector-content');
+      inspector.innerHTML = `
+        <div class="space-y-4 font-mono">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-bold text-white bg-black px-2 py-0.5 border border-black rounded uppercase">Archivo de Código</span>
+            <span class="text-[10px] text-stone-700 font-extrabold">${file.port}</span>
+          </div>
+          <h3 class="text-black font-extrabold text-sm uppercase">
+            📄 ${file.title}
+          </h3>
+          <p class="text-stone-700 text-[11px] leading-relaxed font-sans font-medium">${file.desc}</p>
+          <div class="border-t-2 border-black pt-3 font-sans">
+            <h4 class="text-black font-extrabold text-xs mb-1.5 uppercase">Métricas de Conexión:</h4>
+            <ul class="space-y-1.5 list-none text-stone-700 text-[11px] font-medium">
+              ${file.details.map(detail => `<li class="flex items-start gap-1.5"><span class="font-extrabold">•</span> <span>${detail}</span></li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      `;
+
+      resetNodeBorders();
+      if (fileName === 'server.ts' || fileName === 'security.middleware.ts') {
+        highlightCanvasNode('backend', '#19ae2e');
+      } else if (fileName === 'dbOperations.ts') {
+        highlightCanvasNode('firestore', '#000000');
+      } else if (fileName === 'App.tsx' || fileName === 'vite.config.ts') {
+        highlightCanvasNode('frontend', '#421bda');
+      }
+    }
+
+    // Inspect Nodes inside SVG Diagram
+    function inspectNode(nodeId) {
+      const node = nodeDetails[nodeId];
+      if (!node) return;
+
+      const inspector = document.getElementById('inspector-content');
+      inspector.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-white bg-black px-2.5 py-0.5 border border-black rounded uppercase font-mono">${node.protocol}</span>
+          </div>
+          <h3 class="text-black font-extrabold text-sm border-b-2 border-black pb-2 uppercase">
+            🖥️ ${node.title}
+          </h3>
+          <p class="text-stone-700 text-xs leading-relaxed font-medium">${node.desc}</p>
+          <div class="space-y-2 pt-2">
+            <h4 class="text-black font-extrabold uppercase text-[9px] tracking-wider font-mono">Arquitectura & Rol:</h4>
+            <ul class="space-y-1.5 list-none text-stone-700 text-[11px] font-medium">
+              ${node.bulletPoints.map(pt => `<li class="flex items-start gap-1.5"><span class="font-bold text-black">✔</span> <span>${pt}</span></li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      `;
+
+      resetNodeBorders();
+      const colors = { 'frontend': '#421bda', 'proxy': '#d61a4b', 'backend': '#19ae2e', 'firestore': '#d7f024' };
+      highlightCanvasNode(nodeId, colors[nodeId]);
+    }
+
+    // Inspect Port specifically from table click
+    function inspectPort(portNumber) {
+      const port = portDetails[portNumber];
+      if (!port) return;
+
+      const inspector = document.getElementById('inspector-content');
+      inspector.innerHTML = `
+        <div class="space-y-4 font-sans">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-bold text-white bg-black px-2 py-0.5 border border-black rounded uppercase font-mono">Puerto de Red</span>
+            <span class="text-xs font-bold font-mono text-black">${port.number}</span>
+          </div>
+          <h3 class="text-black font-extrabold text-sm uppercase">
+            🔌 Servicio: ${port.service}
+          </h3>
+          <p class="text-stone-700 text-[11px] leading-relaxed font-medium">${port.desc}</p>
+          
+          <div class="p-3 bg-stone-50 border border-black rounded text-[10px] font-mono text-black leading-normal font-bold">
+            <strong class="font-sans block mb-1 text-black uppercase">Capa de Seguridad Asociada:</strong>
+            ${port.sec}
+          </div>
+        </div>
+      `;
+
+      resetNodeBorders();
+      if (portNumber === '5173') {
+        highlightCanvasNode('frontend', '#421bda');
+      } else if (portNumber === '80') {
+        highlightCanvasNode('proxy', '#d61a4b');
+      } else if (portNumber === '3000') {
+        highlightCanvasNode('backend', '#19ae2e');
+      } else if (portNumber === '443') {
+        highlightCanvasNode('firestore', '#d7f024');
+      }
+    }
+
+    // Node highlight utilities
+    function highlightCanvasNode(nodeId, strokeColor) {
+      const nodeElement = document.getElementById(`box-${nodeId}`);
+      if (nodeElement) {
+        nodeElement.setAttribute('stroke', strokeColor);
+        nodeElement.setAttribute('stroke-width', '4px');
+      }
+    }
+
+    function resetNodeBorders() {
+      const borders = {
+        'box-frontend': '#000000',
+        'box-proxy': '#000000',
+        'box-backend': '#000000',
+        'box-firestore': '#000000'
+      };
+      for (const [id, color] of Object.entries(borders)) {
+        const el = document.getElementById(id);
+        if (el) {
+          el.setAttribute('stroke', color);
+          el.setAttribute('stroke-width', '2px');
+        }
+      }
+    }
+
+    // Action Flow animations with visual indicators
+    function activateFlow(flowType) {
+      resetAllFlows();
+      activeFlow = flowType;
+      
+      const statusBox = document.getElementById('live-console-msg');
+      const authPathOverlay = document.getElementById('overlay-auth-flow');
+      const betPathOverlay1 = document.getElementById('overlay-bet-flow-p1');
+      const betPathOverlay2 = document.getElementById('overlay-bet-flow-p2');
+
+      if (flowType === 'auth') {
+        highlightCanvasNode('frontend', '#421bda');
+        highlightCanvasNode('proxy', '#d61a4b');
+        highlightCanvasNode('backend', '#19ae2e');
+        highlightCanvasNode('firestore', '#d7f024');
+
+        authPathOverlay.setAttribute('stroke', '#421bda');
+        authPathOverlay.classList.add('flow-line');
+
+        statusBox.textContent = "AUTH FLOW ACTIVE: Client requests token → Reverse Proxy (:80) forwards to API Server (:3000) → DB matches Hash.";
+        statusBox.className = "text-black font-mono font-bold";
+
+        inspectNode('proxy');
+
+      } else if (flowType === 'bet') {
+        highlightCanvasNode('frontend', '#19ae2e');
+        highlightCanvasNode('backend', '#19ae2e');
+        highlightCanvasNode('firestore', '#d7f024');
+
+        betPathOverlay1.setAttribute('stroke', '#19ae2e');
+        betPathOverlay1.classList.add('flow-line');
+        betPathOverlay2.setAttribute('stroke', '#000000');
+        betPathOverlay2.classList.add('flow-line');
+
+        statusBox.textContent = "BET TRANSACTION IN PROGRESS: Client POST request → Settle Engine verifies balance → Firestore atomic transaction executed over TLS :443.";
+        statusBox.className = "text-black font-mono font-bold";
+
+        inspectNode('backend');
+
+      } else if (flowType === 'admin') {
+        highlightCanvasNode('frontend', '#d61a4b');
+        highlightCanvasNode('backend', '#d61a4b');
+        highlightCanvasNode('firestore', '#d61a4b');
+
+        betPathOverlay1.setAttribute('stroke', '#d61a4b');
+        betPathOverlay1.classList.add('flow-line');
+        betPathOverlay2.setAttribute('stroke', '#d61a4b');
+        betPathOverlay2.classList.add('flow-line');
+
+        statusBox.textContent = "AUDITING ACTIVE: Admin security context verified. Fetching real-time transactional metrics from NoSQL Document DB.";
+        statusBox.className = "text-black font-mono font-bold";
+
+        inspectNode('firestore');
+      }
+
+      // Sync flow selection button styles (Flat Design button active/inactive states)
+      ['auth', 'bet', 'admin'].forEach(flow => {
+        const btn = document.getElementById(`btn-flow-${flow}`);
+        if (flow === flowType) {
+          btn.className = "w-full text-left px-3 py-3 rounded border-2 border-black bg-stone-100 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-start gap-3 group transition-all";
+        } else {
+          btn.className = "w-full text-left px-3 py-3 rounded border border-stone-200 bg-white hover:bg-stone-50 transition flex items-start gap-3 group";
+        }
+      });
+    }
+
+    // Reset layout highlighting
+    function resetAllFlows() {
+      const overlays = ['overlay-auth-flow', 'overlay-bet-flow-p1', 'overlay-bet-flow-p2'];
+      overlays.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.setAttribute('stroke', 'transparent');
+          el.classList.remove('flow-line');
+        }
+      });
+
+      resetNodeBorders();
+
+      // Reset flow buttons
+      ['auth', 'bet', 'admin'].forEach(flow => {
+        const btn = document.getElementById(`btn-flow-${flow}`);
+        btn.className = "w-full text-left px-3 py-3 rounded border border-stone-200 bg-white hover:bg-stone-50 transition flex items-start gap-3 group";
+      });
+
+      const statusBox = document.getElementById('live-console-msg');
+      statusBox.textContent = "Consola inactiva. Esperando comandos...";
+      statusBox.className = "text-stone-600";
+      
+      activeFlow = 'none';
+    }
+
+    // Init state on load
+    inspectPort('80');
+  </script>
+</body>
+</html>
